@@ -396,17 +396,75 @@ with st.sidebar:
 st.title("🚀 Meta Ads Copywriter AI")
 st.markdown("Buat iklan Facebook/Instagram otomatis hanya dari Link Landing Page.")
 
+# Initialize history in session state
+if 'input_history' not in st.session_state:
+    st.session_state['input_history'] = []
+
+# History selector (outside form)
+if st.session_state['input_history']:
+    with st.expander("📋 Gunakan Input Sebelumnya", expanded=False):
+        history_options = ["-- Pilih dari histori --"] + [
+            f"{entry['product_name']} - {entry['landing_page_url'][:50]}..." 
+            for entry in st.session_state['input_history']
+        ]
+        selected_history = st.selectbox(
+            "Pilih input sebelumnya:",
+            options=range(len(history_options)),
+            format_func=lambda x: history_options[x],
+            key="history_selector"
+        )
+        
+        if selected_history > 0:
+            selected_entry = st.session_state['input_history'][selected_history - 1]
+            if st.button("✅ Gunakan Input Ini"):
+                st.session_state['prefill_product'] = selected_entry['product_name']
+                st.session_state['prefill_url'] = selected_entry['landing_page_url']
+                st.session_state['prefill_notes'] = selected_entry.get('additional_notes', '')
+                st.rerun()
+
 with st.form("ad_input_form"):
-    product_name = st.text_input("Nama Produk", placeholder="Contoh: SlimFit Tea")
-    landing_page_url = st.text_input("Link Landing Page (WAJIB)", placeholder="https://websiteanda.com/promo")
+    product_name = st.text_input(
+        "Nama Produk", 
+        value=st.session_state.get('prefill_product', ''),
+        placeholder="Contoh: SlimFit Tea"
+    )
+    landing_page_url = st.text_input(
+        "Link Landing Page (WAJIB)", 
+        value=st.session_state.get('prefill_url', ''),
+        placeholder="https://websiteanda.com/promo"
+    )
+    additional_notes = st.text_area(
+        "Catatan Tambahan (Opsional)", 
+        value=st.session_state.get('prefill_notes', ''),
+        placeholder="Contoh: Tekankan diskon 50%, target ibu rumah tangga, gunakan testimoni pelanggan, dll.",
+        help="Tambahkan poin-poin khusus yang ingin ditekankan dalam copywriting iklan"
+    )
 
     submitted = st.form_submit_button("✨ Generate Iklan Otomatis", type="primary")
+    
+# Clear prefill after form is rendered
+if 'prefill_product' in st.session_state:
+    del st.session_state['prefill_product']
+    del st.session_state['prefill_url']
+    del st.session_state['prefill_notes']
 
-# --- Logic ---
 if submitted:
     if not landing_page_url:
         st.error("❌ Link Landing Page wajib diisi!")
     else:
+        # Save to history
+        new_entry = {
+            'product_name': product_name,
+            'landing_page_url': landing_page_url,
+            'additional_notes': additional_notes
+        }
+        
+        # Check if this exact entry already exists
+        if new_entry not in st.session_state['input_history']:
+            st.session_state['input_history'].insert(0, new_entry)
+            # Keep only last 10 entries
+            st.session_state['input_history'] = st.session_state['input_history'][:10]
+        
         key_manager = APIKeyManager(manual_api_key)
         
         if not key_manager.keys:
@@ -468,6 +526,7 @@ if submitted:
                                 Nama Produk: {product_name}
                                 Link Landing Page: {landing_page_url}
                                 Bahasa Output: {language}
+                                {f"Catatan Khusus: {additional_notes}" if additional_notes else ""}
                                 
                                 **KONTEN LANDING PAGE:**
                                 {landing_page_text}
